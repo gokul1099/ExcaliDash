@@ -96,6 +96,7 @@ const upload = multer({
   dest: uploadDir,
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB limit
+    files: 1, // Only one file per upload
   },
   fileFilter: (req, file, cb) => {
     // Only allow .db files for SQLite imports
@@ -114,6 +115,22 @@ app.use(
 );
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Log large requests for monitoring and debugging
+app.use((req, res, next) => {
+  const contentLength = req.headers["content-length"];
+  if (contentLength) {
+    const sizeInMB = parseInt(contentLength, 10) / 1024 / 1024;
+    if (sizeInMB > 10) {
+      console.log(
+        `[LARGE REQUEST] ${req.method} ${req.path} - ${sizeInMB.toFixed(
+          2
+        )}MB - Content-Length: ${contentLength} bytes`
+      );
+    }
+  }
+  next();
+});
 
 // Security middleware - Add security headers
 app.use((req, res, next) => {
