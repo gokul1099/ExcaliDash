@@ -80,6 +80,31 @@ const COLORS = [
   "#f43f5e", // rose-500
 ];
 
+const generateClientId = (): string => {
+  const cryptoObj: Crypto | undefined =
+    typeof globalThis !== "undefined"
+      ? globalThis.crypto || (globalThis as any).msCrypto
+      : undefined;
+
+  if (cryptoObj?.randomUUID) {
+    return cryptoObj.randomUUID();
+  }
+
+  if (cryptoObj?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    cryptoObj.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // RFC 4122 variant
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex
+      .slice(6, 8)
+      .join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+  }
+
+  // Final fallback for very old browsers; uniqueness window-scoped only.
+  return `id-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+};
+
 export const getUserIdentity = (): UserIdentity => {
   const stored = localStorage.getItem("excalidash-user-id");
   if (stored) {
@@ -91,7 +116,7 @@ export const getUserIdentity = (): UserIdentity => {
   const randomColor = COLORS[Math.floor(Math.random() * COLORS.length)];
 
   const identity: UserIdentity = {
-    id: crypto.randomUUID(),
+    id: generateClientId(),
     name: randomTransformer.name,
     initials: randomTransformer.initials,
     color: randomColor,
