@@ -7,6 +7,8 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import multer from "multer";
 import archiver from "archiver";
+import Database from "better-sqlite3";
+import { z } from "zod";
 // @ts-ignore
 import { PrismaClient } from "./generated/client";
 
@@ -36,11 +38,19 @@ const resolveDatabaseUrl = (rawUrl?: string) => {
 process.env.DATABASE_URL = resolveDatabaseUrl(process.env.DATABASE_URL);
 console.log("Resolved DATABASE_URL:", process.env.DATABASE_URL);
 
+const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:6767";
+
+const uploadDir = path.resolve(__dirname, "../uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: allowedOrigin,
+    credentials: true,
   },
   maxHttpBufferSize: 1e8, // 100 MB
 });
@@ -48,11 +58,81 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 8000;
 
 // Multer setup for file uploads
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: uploadDir });
 
-app.use(cors());
+app.use(
+  cors({
+    origin: allowedOrigin,
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+const elementsSchema = z.array(z.object({}).passthrough());
+
+const appStateSchema = z.object({}).passthrough();
+
+const filesFieldSchema = z
+  .union([z.record(z.string(), z.any()), z.null()])
+  .optional()
+  .transform((value) => (value === null ? undefined : value));
+
+const drawingBaseSchema = z.object({
+  name: z.string().trim().min(1).max(255).optional(),
+  collectionId: z.union([z.string().trim().min(1), z.null()]).optional(),
+  preview: z.string().nullable().optional(),
+});
+
+const drawingCreateSchema = drawingBaseSchema.extend({
+  elements: elementsSchema.default([]),
+  appState: appStateSchema.default({}),
+  files: filesFieldSchema,
+});
+
+const drawingUpdateSchema = drawingBaseSchema.extend({
+  elements: elementsSchema.optional(),
+  appState: appStateSchema.optional(),
+  files: filesFieldSchema,
+});
+
+const respondWithValidationErrors = (
+  res: express.Response,
+  issues: z.ZodIssue[]
+) => {
+  res.status(400).json({
+    error: "Invalid drawing payload",
+    details: issues,
+  });
+};
+
+const runIntegrityCheck = (filePath: string): boolean => {
+  let dbInstance: Database.Database | undefined;
+  try {
+    dbInstance = new Database(filePath, {
+      readonly: true,
+      fileMustExist: true,
+    });
+    const result = dbInstance.prepare("PRAGMA integrity_check;").get();
+    return result?.integrity_check === "ok";
+  } catch (error) {
+    console.error("Integrity check failed:", error);
+    return false;
+  } finally {
+    dbInstance?.close();
+  }
+};
+
+const removeFileIfExists = (filePath?: string) => {
+  if (!filePath) return;
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error("Failed to remove file", { filePath, error });
+  }
+};
 
 // Socket.io Logic
 interface User {
@@ -213,16 +293,24 @@ app.get("/drawings/:id", async (req, res) => {
 // POST /drawings
 app.post("/drawings", async (req, res) => {
   try {
-    const { name, elements, appState, collectionId, preview, files } = req.body;
+    const parsed = drawingCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return respondWithValidationErrors(res, parsed.error.issues);
+    }
+
+    const payload = parsed.data;
+    const drawingName = payload.name ?? "Untitled Drawing";
+    const targetCollectionId =
+      payload.collectionId === undefined ? null : payload.collectionId;
 
     const newDrawing = await prisma.drawing.create({
       data: {
-        name,
-        elements: JSON.stringify(elements || []),
-        appState: JSON.stringify(appState || {}),
-        collectionId: collectionId || null,
-        preview: preview || null,
-        files: JSON.stringify(files || {}),
+        name: drawingName,
+        elements: JSON.stringify(payload.elements),
+        appState: JSON.stringify(payload.appState),
+        collectionId: targetCollectionId,
+        preview: payload.preview ?? null,
+        files: JSON.stringify(payload.files ?? {}),
       },
     });
 
@@ -241,28 +329,37 @@ app.post("/drawings", async (req, res) => {
 app.put("/drawings/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, elements, appState, collectionId, preview, files } = req.body;
+    const parsed = drawingUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return respondWithValidationErrors(res, parsed.error.issues);
+    }
+
+    const payload = parsed.data;
 
     console.log("[API] Updating drawing", {
       id,
-      hasElements: elements !== undefined,
-      elementCount:
-        elements && Array.isArray(elements) ? elements.length : undefined,
-      hasAppState: appState !== undefined,
-      hasFiles: files !== undefined,
-      hasPreview: preview !== undefined,
+      hasElements: payload.elements !== undefined,
+      elementCount: Array.isArray(payload.elements)
+        ? payload.elements.length
+        : undefined,
+      hasAppState: payload.appState !== undefined,
+      hasFiles: payload.files !== undefined,
+      hasPreview: payload.preview !== undefined,
     });
 
     const data: any = {
       version: { increment: 1 },
     };
 
-    if (name !== undefined) data.name = name;
-    if (elements !== undefined) data.elements = JSON.stringify(elements);
-    if (appState !== undefined) data.appState = JSON.stringify(appState);
-    if (files !== undefined) data.files = JSON.stringify(files);
-    if (collectionId !== undefined) data.collectionId = collectionId;
-    if (preview !== undefined) data.preview = preview;
+    if (payload.name !== undefined) data.name = payload.name;
+    if (payload.elements !== undefined)
+      data.elements = JSON.stringify(payload.elements);
+    if (payload.appState !== undefined)
+      data.appState = JSON.stringify(payload.appState);
+    if (payload.files !== undefined) data.files = JSON.stringify(payload.files);
+    if (payload.collectionId !== undefined)
+      data.collectionId = payload.collectionId;
+    if (payload.preview !== undefined) data.preview = payload.preview;
 
     const updatedDrawing = await prisma.drawing.update({
       where: { id },
@@ -528,24 +625,19 @@ app.post("/import/sqlite/verify", upload.single("db"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    // Basic verification: check if it's a SQLite file
-    const buffer = fs.readFileSync(req.file.path);
-    const header = buffer.slice(0, 16).toString("ascii");
+    const stagedPath = req.file.path;
+    const isValid = runIntegrityCheck(stagedPath);
+    removeFileIfExists(stagedPath);
 
-    if (!header.startsWith("SQLite format 3")) {
-      fs.unlinkSync(req.file.path);
+    if (!isValid) {
       return res.status(400).json({ error: "Invalid SQLite file" });
     }
 
-    // Additional verification could be added here
-    // For now, we'll just check the file signature
-
-    fs.unlinkSync(req.file.path);
     res.json({ valid: true, message: "Database file is valid" });
   } catch (error) {
     console.error(error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    if (req.file) {
+      removeFileIfExists(req.file.path);
     }
     res.status(500).json({ error: "Failed to verify database file" });
   }
@@ -558,17 +650,42 @@ app.post("/import/sqlite", upload.single("db"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const dbPath = path.resolve(__dirname, "../prisma/dev.db");
+    const originalPath = req.file.path;
+    const stagedPath = path.join(
+      uploadDir,
+      `temp-${Date.now()}-${Math.random().toString(36).slice(2)}.db`
+    );
 
-    // Backup current database
-    if (fs.existsSync(dbPath)) {
-      const backupPath = path.resolve(__dirname, "../prisma/dev.db.backup");
-      fs.copyFileSync(dbPath, backupPath);
+    try {
+      fs.renameSync(originalPath, stagedPath);
+    } catch (error) {
+      console.error("Failed to stage uploaded database", error);
+      removeFileIfExists(originalPath);
+      removeFileIfExists(stagedPath);
+      return res.status(500).json({ error: "Failed to stage uploaded file" });
     }
 
-    // Replace database file
-    fs.copyFileSync(req.file.path, dbPath);
-    fs.unlinkSync(req.file.path);
+    const isValid = runIntegrityCheck(stagedPath);
+    if (!isValid) {
+      removeFileIfExists(stagedPath);
+      return res
+        .status(400)
+        .json({ error: "Uploaded database failed integrity check" });
+    }
+
+    const dbPath = path.resolve(__dirname, "../prisma/dev.db");
+    const backupPath = path.resolve(__dirname, "../prisma/dev.db.backup");
+
+    try {
+      if (fs.existsSync(dbPath)) {
+        fs.copyFileSync(dbPath, backupPath);
+      }
+      fs.renameSync(stagedPath, dbPath);
+    } catch (error) {
+      console.error("Failed to replace database", error);
+      removeFileIfExists(stagedPath);
+      return res.status(500).json({ error: "Failed to replace database" });
+    }
 
     // Reinitialize Prisma client
     await prisma.$disconnect();
@@ -576,8 +693,8 @@ app.post("/import/sqlite", upload.single("db"), async (req, res) => {
     res.json({ success: true, message: "Database imported successfully" });
   } catch (error) {
     console.error(error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    if (req.file) {
+      removeFileIfExists(req.file.path);
     }
     res.status(500).json({ error: "Failed to import database" });
   }

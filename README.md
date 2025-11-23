@@ -15,7 +15,9 @@ A self-hosted dashboard and organizer for [Excalidraw](https://github.com/excali
 
 ## Table of Contents
 
+- [Screenshots](#screenshots)
 - [Features](#features)
+- [Upgrading](#upgrading)
 - [Installation](#installation)
   - [Docker Hub (Recommended)](#dockerhub-recommended)
   - [Docker Build](#docker-build)
@@ -60,6 +62,12 @@ A self-hosted dashboard and organizer for [Excalidraw](https://github.com/excali
 <summary>Export/import your drawings and databases for backup</summary>
 
 ![](settingsPage.png)
+
+</details>
+
+# Upgrading
+
+See [release notes](https://github.com/ZimengXiong/ExcaliDash/releases) for a specific release.
 
 </details>
 
