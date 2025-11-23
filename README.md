@@ -76,6 +76,9 @@ See [release notes](https://github.com/ZimengXiong/ExcaliDash/releases) for a sp
 > [!CAUTION]
 > NOT for production use. While attempts have been made at hardening (XSS/dompurify, CORS, rate-limiting, sanitization) have been made, they are inadequate for public deployment. Do not expose any ports. Currently lacking CSRF.
 
+> [!CAUTION]
+> ExcaliDash is in BETA. Please backup your data regularly (e.g. with cron).
+
 ## Docker Hub (Recommended)
 
 [Install Docker](https://docs.docker.com/desktop/)

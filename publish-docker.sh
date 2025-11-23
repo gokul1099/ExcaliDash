@@ -4,7 +4,7 @@ set -e
 # Configuration
 DOCKER_USERNAME="zimengxiong"
 IMAGE_NAME="excalidash"
-VERSION=${1:-latest}
+VERSION=${1:-$(node -e "try { console.log(require('fs').readFileSync('VERSION', 'utf8').trim()) } catch { console.log('latest') }")}
 
 # Colors for output
 RED='\033[0;31m'

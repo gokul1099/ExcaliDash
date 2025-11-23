@@ -4,7 +4,7 @@ set -e
 # Configuration
 DOCKER_USERNAME="zimengxiong"
 IMAGE_NAME="excalidash"
-VERSION=${1:-pre-release}
+VERSION=${1:-$(node -e "try { console.log(require('fs').readFileSync('VERSION', 'utf8').trim() + '-dev') } catch { console.log('pre-release') }")}
 
 # Colors for output
 RED='\033[0;31m'
@@ -17,8 +17,8 @@ echo -e "${BLUE}===========================================${NC}"
 echo -e "${BLUE}ExcaliDash Pre-Release Docker Builder${NC}"
 echo -e "${BLUE}===========================================${NC}"
 echo ""
-echo -e "${YELLOW}⚠️  This will publish images with tag: ${VERSION}${NC}"
-echo -e "${YELLOW}⚠️  Pre-release images will NOT update 'latest' tag${NC}"
+echo -e "${YELLOW}This will publish images with tag: ${VERSION}${NC}"
+echo -e "${YELLOW}Pre-release images will NOT update 'latest' tag${NC}"
 echo ""
 
 # Confirm before proceeding
