@@ -84,6 +84,9 @@ Prisma.NullTypes = {
  * Enums
  */
 exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
   Serializable: 'Serializable'
 });
 
@@ -119,6 +122,11 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+};
+
 exports.Prisma.NullsOrder = {
   first: 'first',
   last: 'last'
@@ -141,7 +149,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/Users/zimengx/Code/Apps_CLI_Scripts/ExcaliDash/backend/src/generated/client",
+      "value": "/Users/gsubramaniyan/Documents/learn/ExcaliDash/backend/src/generated/client",
       "fromEnvVar": null
     },
     "config": {
@@ -163,7 +171,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/Users/zimengx/Code/Apps_CLI_Scripts/ExcaliDash/backend/prisma/schema.prisma",
+    "sourceFilePath": "/Users/gsubramaniyan/Documents/learn/ExcaliDash/backend/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
@@ -176,7 +184,7 @@ const config = {
   "datasourceNames": [
     "db"
   ],
-  "activeProvider": "sqlite",
+  "activeProvider": "postgresql",
   "inlineDatasources": {
     "db": {
       "url": {
@@ -185,8 +193,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\ngenerator client {\n  provider      = \"prisma-client-js\"\n  output        = \"../src/generated/client\"\n  binaryTargets = [\"native\", \"linux-musl-arm64-openssl-3.0.x\", \"linux-musl-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"sqlite\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Collection {\n  id        String    @id @default(uuid())\n  name      String\n  drawings  Drawing[]\n  createdAt DateTime  @default(now())\n  updatedAt DateTime  @updatedAt\n}\n\nmodel Drawing {\n  id           String      @id @default(uuid())\n  name         String\n  elements     String // Stored as JSON string\n  appState     String // Stored as JSON string\n  files        String      @default(\"{}\") // Stored as JSON string\n  preview      String? // SVG string for thumbnail\n  version      Int         @default(1)\n  collectionId String?\n  collection   Collection? @relation(fields: [collectionId], references: [id])\n  createdAt    DateTime    @default(now())\n  updatedAt    DateTime    @updatedAt\n}\n\nmodel Library {\n  id        String   @id @default(\"default\") // Singleton pattern - use \"default\" ID\n  items     String   @default(\"[]\") // Stored as JSON string array of library items\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n",
-  "inlineSchemaHash": "a6a8e55dadb0695c66246575cd1a63af3afd912ce070b4798d2e56269d371c87",
+  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\ngenerator client {\n  provider      = \"prisma-client-js\"\n  output        = \"../src/generated/client\"\n  binaryTargets = [\"native\", \"linux-musl-arm64-openssl-3.0.x\", \"linux-musl-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Collection {\n  id        String    @id @default(uuid())\n  name      String\n  drawings  Drawing[]\n  createdAt DateTime  @default(now())\n  updatedAt DateTime  @updatedAt\n}\n\nmodel Drawing {\n  id           String      @id @default(uuid())\n  name         String\n  elements     String // Stored as JSON string\n  appState     String // Stored as JSON string\n  files        String      @default(\"{}\") // Stored as JSON string\n  preview      String? // SVG string for thumbnail\n  version      Int         @default(1)\n  collectionId String?\n  collection   Collection? @relation(fields: [collectionId], references: [id])\n  createdAt    DateTime    @default(now())\n  updatedAt    DateTime    @updatedAt\n}\n\nmodel Library {\n  id        String   @id @default(\"default\") // Singleton pattern - use \"default\" ID\n  items     String   @default(\"[]\") // Stored as JSON string array of library items\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n",
+  "inlineSchemaHash": "6afb057682d2d5aad0bacb6ab3b3db80a8cb343088c5f687586f954c43e67158",
   "copyEngine": true
 }
 config.dirname = '/'
