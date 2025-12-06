@@ -56,11 +56,15 @@ const normalizeOrigins = (rawOrigins?: string | null): string[] => {
   const ensureProtocol = (origin: string) =>
     /^https?:\/\//i.test(origin) ? origin : `http://${origin}`;
 
+  const removeTrailingSlash = (origin: string) =>
+    origin.endsWith("/") ? origin.slice(0, -1) : origin;
+
   const parsed = rawOrigins
     .split(",")
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0)
-    .map(ensureProtocol);
+    .map(ensureProtocol)
+    .map(removeTrailingSlash);
 
   return parsed.length > 0 ? parsed : [fallback];
 };
